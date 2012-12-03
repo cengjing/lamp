@@ -50,12 +50,12 @@
 
 稳定版是相对稳定的版本，开发版是更新频率较高的版本，带有新特性，但可能存在较多Bug。
 
-方法：通过Git下载（推荐）
+1、方法：通过Git下载（推荐）
 
 	yum -y install screen git  #Redhat/CentOS
 	apt-get -y install screen git-core git-gui  #Debian/Ubuntu
 	screen -S lanmp
-	git clone https://github.com/wangyan/lanmp.git
+	git clone https://github.com/logdns/lamp.git
 	cd lanmp && ./install.sh #安装稳定版
 	cd lanmp && git checkout develop && ./install.sh #安装开发版（二选一）
 
@@ -78,7 +78,7 @@
 
 2.	可能会不兼容你的VPS
 
-	改进措施：如果您安装失败，麻烦您将安装目录下的`log.txt`日志文件发给我分析 [WangYan@188.com](WangYan@188.com)
+	改进措施：如果您安装失败，麻烦您将安装目录下的`log.txt`日志文件发给分析 [WangYan@188.com](WangYan@188.com)
 
 3.	针对512M内存的VPS进行了优化
 
