@@ -90,25 +90,15 @@ echo "PHP Version = $PHP_VER"
 echo "---------------------------"
 echo ""
 
-ping -c 1 42.121.87.254 > $LANMP_PATH/aliyun.txt
-
-if grep -iqw ttl $LANMP_PATH/aliyun.txt; then
-	IS_ALIYUN="1"
-else
-	IS_ALIYUN="0"
+echo "Do you want to initialize aliyun ? (y/n)"
+read -p "(Default: n):" INIT_ALIYUN
+if [ -z $INIT_ALIYUN ]; then
+	INIT_ALIYUN="n"
 fi
-
-if [ "$IS_ALIYUN" = "1" ]; then
-	echo "Do you want to initialize aliyun ? (y/n)"
-	read -p "(Default: n):" INIT_ALIYUN
-	if [ -z $INIT_ALIYUN ]; then
-		INIT_ALIYUN="n"
-	fi
-	echo "---------------------------"
-	echo "You choose = $INIT_ALIYUN"
-	echo "---------------------------"
-	echo ""
-fi
+echo "---------------------------"
+echo "You choose = $INIT_ALIYUN"
+echo "---------------------------"
+echo ""
 
 echo "Do you want to install xcache ? (y/n)"
 read -p "(Default: y):" INSTALL_XC
@@ -155,8 +145,19 @@ echo "Or Ctrl+C cancel and exit ?"
 echo ""
 char=`get_char`
 
+echo "---------- Network Check ----------"
+
+ping -c 1 baidu.com &>/dev/null && PING=1 || PING=0
+
 if [ -d "$LANMP_PATH/src" ];then
 	\mv $LANMP_PATH/src/* $LANMP_PATH
+fi
+
+if [ "$PING" = 0 ];then
+	echo "Network Failed!"
+	[ ! -s mysql-*.tar.gz ] && exit
+else
+	echo "Network OK"
 fi
 
 echo "---------- Aliyun Initialize ----------"
@@ -181,7 +182,7 @@ rm -rf /etc/localtime
 ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 apt-get -y install ntpdate
-ntpdate -d cn.pool.ntp.org
+[ "$PING" = 1 ] && ntpdate -d cn.pool.ntp.org
 
 echo "---------- Disable SeLinux ----------"
 
@@ -229,19 +230,23 @@ fi
 echo "---------- Dependent Packages ----------"
 
 apt-get update
-apt-get -y install make cmake autoconf2.13 gcc g++ libtool build-essential
-apt-get -y install wget elinks bison
-apt-get -y install openssl libssl0.9 libssl-dev libsasl2-2 libsasl2-dev
-apt-get -y install zlibc zlib1g zlib1g-dev
-apt-get -y install libfreetype6 libfreetype6-dev
-apt-get -y install libxml2 libxml2-dev
-apt-get -y install libmhash2 libmhash-dev
-apt-get -y install curl libcurl3 libcurl4-openssl-dev
-apt-get -y install libxmlrpc-core-c3 libxmlrpc-core-c3-dev
-apt-get -y install libevent-dev libevent-2.0-5
-apt-get -y install libncurses5 libncurses5-dev
-apt-get -y install libltdl7 libltdl-dev
-apt-get -y install libc-client2007e libc-client2007e-dev
+apt-get -y autoremove
+apt-get -fy install
+apt-get -y --force-yes install make cmake autoconf2.13 gcc g++ libtool build-essential
+apt-get -y --force-yes install wget elinks bison unzip tar
+apt-get -y --force-yes install openssl libssl0.9 libssl-dev libsasl2-2 libsasl2-dev
+apt-get -y --force-yes install zlibc zlib1g zlib1g-dev
+apt-get -y --force-yes install libfreetype6 libfreetype6-dev
+apt-get -y --force-yes install libxml2 libxml2-dev
+apt-get -y --force-yes install libmhash2 libmhash-dev
+apt-get -y --force-yes install curl libcurl3 libcurl4-openssl-dev
+apt-get -y --force-yes install libxmlrpc-c3 libxmlrpc-c3-dev
+apt-get -y --force-yes install libevent-dev
+apt-get -y --force-yes install libncurses5 libncurses5-dev
+apt-get -y --force-yes install libltdl7 libltdl-dev
+apt-get -y --force-yes install libc-client2007e libc-client2007e-dev
+apt-get -y autoremove
+apt-get -fy install
 
 ####################### Extract Function ########################
 
@@ -287,7 +292,7 @@ groupadd mysql
 useradd -g mysql -s /bin/false mysql
 
 if [ ! -s mysql-*.tar.gz ]; then
-	LATEST_MYSQL_LINK=`elinks ftp://mirror.csclub.uwaterloo.ca/mysql/Downloads/MySQL-5.5/ | awk '/ftp:.+\.[0-9][0-9][a-z]?\.tar\.gz$/{print $2}' | tail -n 1`
+	LATEST_MYSQL_LINK=`elinks ftp://mirror.csclub.uwaterloo.ca/mysql/Downloads/MySQL-5.6/ | awk '/ftp:.+\.[0-9][0-9][a-z]?\.tar\.gz$/{print $2}' | tail -n 1`
 	BACKUP_MYSQL_LINK='http://wangyan.org/download/lanmp-src/mysql-latest.tar.gz'
 	Extract ${LATEST_MYSQL_LINK} ${BACKUP_MYSQL_LINK}
 else
@@ -300,18 +305,20 @@ cmake . \
 -DEXTRA_CHARSETS=all \
 -DDEFAULT_CHARSET=utf8 \
 -DDEFAULT_COLLATION=utf8_general_ci \
+-DWITH_MYISAM_STORAGE_ENGINE=1 \
+-DWITH_INNOBASE_STORAGE_ENGINE=1 \
+-DWITH_MEMORY_STORAGE_ENGINE=1 \
 -DWITH_READLINE=1 \
--DWITH_SSL=system \
--DWITH_ZLIB=system \
--DWITH_EMBEDDED_SERVER=1 \
--DENABLED_LOCAL_INFILE=1
+-DENABLED_LOCAL_INFILE=1 \
+-DENABLE_DOWNLOADS=0
 make install
 
-cd ../
-cp conf/my.cnf /etc/my.cnf
+#cd ../
+#cp conf/my.cnf /etc/my.cnf
+cp support-files/my-default.cnf /etc/my.cnf
 
 cd /usr/local/mysql
-scripts/mysql_install_db --user=mysql --basedir=/usr/local/mysql
+scripts/mysql_install_db --user=mysql --basedir=/usr/local/mysql --explicit_defaults_for_timestamp
 chown -R root:root /usr/local/mysql/.
 chown -R mysql /usr/local/mysql/data
 
@@ -1011,7 +1018,7 @@ if [ "$SOFTWARE" != "2" ]; then
 	mkdir -p /var/tmp/nginx
 	
 	if [ ! -s nginx-*.tar.gz ]; then
-		LATEST_NGINX_LINK=`elinks http://nginx.org/download/ | awk '/http.+gz$/{print $2}' | tail -1`
+		LATEST_NGINX_LINK=`curl -s http://nginx.org/| awk -F- '/nginx-/{print $6}' | head -1|cut -d '<' -f 1`
 		BACKUP_NGINX_LINK="http://wangyan.org/download/lanmp-src/nginx-latest.tar.gz"
 		Extract ${LATEST_NGINX_LINK} ${BACKUP_NGINX_LINK}
 	else
@@ -1087,9 +1094,9 @@ fi
 echo "================phpMyAdmin Install==============="
 
 cd $LANMP_PATH/
-PMA_VERSION=`elinks http://nchc.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/ | awk -F/ '{print $7F}' | sort -n | grep -iv 'rc' | tail -1`
 
 if [ ! -s phpMyAdmin-*-all-languages.tar.gz ]; then
+	PMA_VERSION=`elinks http://nchc.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/ | awk -F/ '{print $7F}' | sort -n | grep -iv '-' | tail -1`
 	PMA_LINK="http://nchc.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/"
 	LATEST_PMA_LINK="${PMA_LINK}${PMA_VERSION}/phpMyAdmin-${PMA_VERSION}-all-languages.tar.gz"
 	BACKUP_PMA_LINK="http://wangyan.org/download/lanmp-src/phpMyAdmin-latest-all-languages.tar.gz"
@@ -1097,6 +1104,7 @@ if [ ! -s phpMyAdmin-*-all-languages.tar.gz ]; then
 	mkdir -p $WEBROOT/phpmyadmin
 	mv * $WEBROOT/phpmyadmin
 else
+	PMA_VERSION=`ls phpMyAdmin-*-all-languages.tar.gz | awk -F- '{print $2}'`
 	tar -zxf phpMyAdmin-*-all-languages.tar.gz -C $WEBROOT
 	mv $WEBROOT/phpMyAdmin-*-all-languages $WEBROOT/phpmyadmin
 fi

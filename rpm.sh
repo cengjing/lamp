@@ -90,25 +90,15 @@ echo "PHP Version = $PHP_VER"
 echo "---------------------------"
 echo ""
 
-ping -c 1 42.121.87.254 > $LANMP_PATH/aliyun.txt
-
-if grep -iqw ttl $LANMP_PATH/aliyun.txt; then
-	IS_ALIYUN="1"
-else
-	IS_ALIYUN="0"
+echo "Do you want to initialize aliyun ? (y/n)"
+read -p "(Default: n):" INIT_ALIYUN
+if [ -z $INIT_ALIYUN ]; then
+	INIT_ALIYUN="n"
 fi
-
-if [ "$IS_ALIYUN" = "1" ]; then
-	echo "Do you want to initialize aliyun ? (y/n)"
-	read -p "(Default: n):" INIT_ALIYUN
-	if [ -z $INIT_ALIYUN ]; then
-		INIT_ALIYUN="n"
-	fi
-	echo "---------------------------"
-	echo "You choose = $INIT_ALIYUN"
-	echo "---------------------------"
-	echo ""
-fi
+echo "---------------------------"
+echo "You choose = $INIT_ALIYUN"
+echo "---------------------------"
+echo ""
 
 echo "Do you want to install xCache ? (y/n)"
 read -p "(Default: y):" INSTALL_XC
@@ -155,8 +145,19 @@ echo "Or Ctrl+C cancel and exit ?"
 echo ""
 char=`get_char`
 
+echo "---------- Network Check ----------"
+
+ping -c 1 baidu.com &>/dev/null && PING=1 || PING=0
+
 if [ -d "$LANMP_PATH/src" ];then
 	\mv $LANMP_PATH/src/* $LANMP_PATH
+fi
+
+if [ "$PING" = 0 ];then
+	echo "Network Failed!"
+	[ ! -s mysql-*.tar.gz ] && exit
+else
+	echo "Network OK"
 fi
 
 echo "---------- Aliyun Initialize ----------"
@@ -167,9 +168,6 @@ fi
 
 echo "---------- Remove Packages ----------"
 
-rpm -e httpd
-rpm -e mysql
-rpm -e php
 yum -y remove httpd
 yum -y remove mysql
 yum -y remove php
@@ -186,7 +184,7 @@ rm -rf /etc/localtime
 ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 yum -y install ntp
-ntpdate -d cn.pool.ntp.org
+[ "$PING" = 1 ] && ntpdate -d cn.pool.ntp.org
 
 echo "---------- Disable SeLinux ----------"
 
@@ -234,7 +232,7 @@ fi
 echo "---------- Dependent Packages ----------"
 
 yum -y install make cmake autoconf autoconf213 gcc gcc-c++ libtool
-yum -y install wget elinks bison patch
+yum -y install wget elinks bison patch unzip tar
 yum -y install openssl openssl-devel
 yum -y install zlib zlib-devel
 yum -y install freetype freetype-devel
@@ -290,7 +288,7 @@ groupadd mysql
 useradd -g mysql -M -s /bin/false mysql
 
 if [ ! -s mysql-*.tar.gz ]; then
-	LATEST_MYSQL_LINK=`elinks ftp://mirror.csclub.uwaterloo.ca/mysql/Downloads/MySQL-5.5/ | awk '/ftp:.+\.[0-9][0-9][a-z]?\.tar\.gz$/{print $2}' | tail -n 1`
+	LATEST_MYSQL_LINK=`elinks ftp://mirror.csclub.uwaterloo.ca/mysql/Downloads/MySQL-5.6/ | awk '/ftp:.+\.[0-9][0-9][a-z]?\.tar\.gz$/{print $2}' | tail -n 1`
 	BACKUP_MYSQL_LINK='http://wangyan.org/download/lanmp-src/mysql-latest.tar.gz'
 	Extract ${LATEST_MYSQL_LINK} ${BACKUP_MYSQL_LINK}
 else
@@ -303,18 +301,20 @@ cmake . \
 -DEXTRA_CHARSETS=all \
 -DDEFAULT_CHARSET=utf8 \
 -DDEFAULT_COLLATION=utf8_general_ci \
+-DWITH_MYISAM_STORAGE_ENGINE=1 \
+-DWITH_INNOBASE_STORAGE_ENGINE=1 \
+-DWITH_MEMORY_STORAGE_ENGINE=1 \
 -DWITH_READLINE=1 \
--DWITH_SSL=system \
--DWITH_ZLIB=system \
--DWITH_EMBEDDED_SERVER=1 \
--DENABLED_LOCAL_INFILE=1
+-DENABLED_LOCAL_INFILE=1 \
+-DENABLE_DOWNLOADS=0
 make install
 
-cd ../
-cp conf/my.cnf /etc/my.cnf
+#cd ../
+#cp conf/my.cnf /etc/my.cnf
+cp support-files/my-default.cnf /etc/my.cnf
 
 cd /usr/local/mysql
-scripts/mysql_install_db --user=mysql --basedir=/usr/local/mysql
+scripts/mysql_install_db --user=mysql --basedir=/usr/local/mysql --explicit_defaults_for_timestamp
 chown -R root:root /usr/local/mysql/.
 chown -R mysql /usr/local/mysql/data
 
@@ -1012,7 +1012,7 @@ if [ "$SOFTWARE" != "2" ]; then
 	mkdir -p /var/tmp/nginx
 	
 	if [ ! -s nginx-*.tar.gz ]; then
-		LATEST_NGINX_LINK=`elinks http://nginx.org/download/ | awk '/http.+gz$/{print $2}' | tail -1`
+		LATEST_NGINX_LINK=`curl -s http://nginx.org/| awk -F- '/nginx-/{print $6}' | head -1|cut -d '<' -f 1`
 		BACKUP_NGINX_LINK="http://wangyan.org/download/lanmp-src/nginx-latest.tar.gz"
 		Extract ${LATEST_NGINX_LINK} ${BACKUP_NGINX_LINK}
 	else
@@ -1088,9 +1088,9 @@ fi
 echo "================phpMyAdmin Install==============="
 
 cd $LANMP_PATH/
-PMA_VERSION=`elinks http://nchc.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/ | awk -F/ '{print $7F}' | sort -n | grep -iv 'rc' | tail -1`
 
 if [ ! -s phpMyAdmin-*-all-languages.tar.gz ]; then
+	PMA_VERSION=`elinks http://nchc.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/ | awk -F/ '{print $7F}' | sort -n | grep -iv '-' | tail -1`
 	PMA_LINK="http://nchc.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/"
 	LATEST_PMA_LINK="${PMA_LINK}${PMA_VERSION}/phpMyAdmin-${PMA_VERSION}-all-languages.tar.gz"
 	BACKUP_PMA_LINK="http://wangyan.org/download/lanmp-src/phpMyAdmin-latest-all-languages.tar.gz"
@@ -1098,6 +1098,7 @@ if [ ! -s phpMyAdmin-*-all-languages.tar.gz ]; then
 	mkdir -p $WEBROOT/phpmyadmin
 	mv * $WEBROOT/phpmyadmin
 else
+	PMA_VERSION=`ls phpMyAdmin-*-all-languages.tar.gz | awk -F- '{print $2}'`
 	tar -zxf phpMyAdmin-*-all-languages.tar.gz -C $WEBROOT
 	mv $WEBROOT/phpMyAdmin-*-all-languages $WEBROOT/phpmyadmin
 fi
